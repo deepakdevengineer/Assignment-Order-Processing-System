@@ -81,7 +81,11 @@ router.post('/upload', upload.single('file'), (req, res) => {
             'INSERT INTO orders (order_id, sku, qty, amount, status, fail_at, comp_fail_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
             [item.order_id, item.sku, item.qty, item.amount, 'IN_PROGRESS', item.fail_at || null, item.comp_fail_at || null]
           );
-          await orderQueue.add(item);
+          if (orderQueue) {
+            await orderQueue.add(item).catch(() => processOrder(item));
+          } else {
+            processOrder(item).catch(err => console.error('Fallback processOrder error:', err));
+          }
           totalQueued++;
         }
       } catch (err) {
