@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpEvent, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import {
   Order,
@@ -53,10 +53,13 @@ export class OrderService {
     return this.http.get<OrderDetailResponse>(`${this.baseUrl}/orders/${id}`);
   }
 
-  uploadCsv(file: File): Observable<UploadResponse> {
+  uploadCsv(file: File): Observable<HttpEvent<UploadResponse>> {
     const formData = new FormData();
     formData.append('file', file);
-    return this.http.post<UploadResponse>(`${this.baseUrl}/orders/upload`, formData);
+    return this.http.post<UploadResponse>(`${this.baseUrl}/orders/upload`, formData, {
+      reportProgress: true,
+      observe: 'events'
+    });
   }
 
   markShipped(id: string): Observable<any> {

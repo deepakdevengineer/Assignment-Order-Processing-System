@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
+import { HttpEventType } from '@angular/common/http';
 import { OrderService } from '../../services/order.service';
 
 @Component({
@@ -62,12 +63,25 @@ import { OrderService } from '../../services/order.service';
         </div>
       </div>
 
-      <!-- Uploading State -->
+      <!-- Uploading State with Percentage Progress Bar -->
       <div class="upload-card card uploading-state" *ngIf="uploading">
         <div class="upload-progress">
-          <div class="spinner" style="width:48px; height:48px; border-width:4px;"></div>
-          <h3>Processing orders...</h3>
-          <p>Streaming and queuing orders for processing</p>
+          <div class="progress-circle-wrapper">
+            <div class="spinner" style="width:56px; height:56px; border-width:4px;"></div>
+            <span class="progress-percentage">{{ uploadProgress }}%</span>
+          </div>
+          <h3>Uploading and Processing Orders...</h3>
+          <p class="progress-subtitle" *ngIf="uploadProgress < 100">
+            Uploading CSV file ({{ uploadProgress }}% complete)
+          </p>
+          <p class="progress-subtitle" *ngIf="uploadProgress === 100">
+            Saving orders into cloud database & starting Saga Orchestration...
+          </p>
+
+          <!-- Linear Animated Progress Bar -->
+          <div class="progress-bar-container">
+            <div class="progress-bar-fill" [style.width.%]="uploadProgress"></div>
+          </div>
         </div>
       </div>
 
@@ -211,7 +225,7 @@ import { OrderService } from '../../services/order.service';
 
     .uploading-state {
       text-align: center;
-      padding: 64px;
+      padding: 64px 32px;
     }
 
     .upload-progress {
@@ -219,6 +233,21 @@ import { OrderService } from '../../services/order.service';
       flex-direction: column;
       align-items: center;
       gap: 16px;
+      width: 100%;
+    }
+
+    .progress-circle-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .progress-percentage {
+      position: absolute;
+      font-weight: 800;
+      font-size: 0.9375rem;
+      color: var(--accent-blue);
     }
 
     .upload-progress h3 {
@@ -226,8 +255,26 @@ import { OrderService } from '../../services/order.service';
       color: var(--text-primary);
     }
 
-    .upload-progress p {
+    .progress-subtitle {
       color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+
+    .progress-bar-container {
+      width: 100%;
+      max-width: 400px;
+      height: 10px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #3b82f6 0%, #6366f1 100%);
+      border-radius: 999px;
+      transition: width 0.3s ease;
     }
 
     .result-state {
@@ -311,6 +358,7 @@ import { OrderService } from '../../services/order.service';
 export class UploadComponent {
   selectedFile: File | null = null;
   uploading = false;
+  uploadProgress = 0;
   uploadResult: any = null;
   errorMessage = '';
   isDragging = false;
@@ -353,11 +401,20 @@ export class UploadComponent {
   upload() {
     if (!this.selectedFile) return;
     this.uploading = true;
+    this.uploadProgress = 0;
     this.errorMessage = '';
+
     this.orderService.uploadCsv(this.selectedFile).subscribe({
-      next: (res) => {
-        this.uploading = false;
-        this.uploadResult = res;
+      next: (event: any) => {
+        if (event.type === HttpEventType.UploadProgress) {
+          if (event.total) {
+            this.uploadProgress = Math.round((100 * event.loaded) / event.total);
+          }
+        } else if (event.type === HttpEventType.Response) {
+          this.uploadProgress = 100;
+          this.uploading = false;
+          this.uploadResult = event.body;
+        }
       },
       error: (err) => {
         this.uploading = false;
@@ -369,6 +426,7 @@ export class UploadComponent {
   resetUpload() {
     this.selectedFile = null;
     this.uploadResult = null;
+    this.uploadProgress = 0;
     this.errorMessage = '';
   }
 

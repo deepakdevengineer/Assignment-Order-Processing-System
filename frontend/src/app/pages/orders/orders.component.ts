@@ -24,14 +24,13 @@ import { Order, OrdersResponse } from '../../models/order.model';
         </div>
       </div>
 
-      <!-- Stats -->
+      <!-- Stats Grid with Crystal Clear Numbers -->
       <div class="stats-grid">
         <div class="stat-card" *ngFor="let stat of stats; let i = index"
              [style.animation-delay]="(i * 0.08) + 's'"
              style="animation: fadeIn 0.4s ease-out both;">
           <div class="stat-label">{{ stat.label }}</div>
-          <div class="stat-value" [style.background]="stat.gradient"
-               style="-webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+          <div class="stat-value-solid" [style.color]="stat.color">
             {{ stat.value }}
           </div>
         </div>
@@ -193,6 +192,15 @@ import { Order, OrdersResponse } from '../../models/order.model';
       gap: 8px;
     }
 
+    .stat-value-solid {
+      font-size: 2.25rem;
+      font-weight: 800;
+      font-family: var(--font-mono), sans-serif;
+      line-height: 1.2;
+      display: block;
+      margin-top: 4px;
+    }
+
     .filters-bar {
       display: flex;
       justify-content: space-between;
@@ -296,11 +304,11 @@ export class OrdersComponent implements OnInit, OnDestroy {
   private refreshInterval: any;
 
   stats = [
-    { label: 'Total Orders', value: 0, gradient: 'var(--gradient-brand)' },
-    { label: 'Placed', value: 0, gradient: 'linear-gradient(135deg, #10b981, #06b6d4)' },
-    { label: 'In Progress', value: 0, gradient: 'linear-gradient(135deg, #3b82f6, #8b5cf6)' },
-    { label: 'Cancelled', value: 0, gradient: 'linear-gradient(135deg, #ef4444, #ec4899)' },
-    { label: 'Needs Attention', value: 0, gradient: 'linear-gradient(135deg, #f59e0b, #ef4444)' }
+    { label: 'Total Orders', value: 0, color: '#60a5fa' },
+    { label: 'Placed', value: 0, color: '#34d399' },
+    { label: 'In Progress', value: 0, color: '#818cf8' },
+    { label: 'Cancelled', value: 0, color: '#f87171' },
+    { label: 'Needs Attention', value: 0, color: '#fbbf24' }
   ];
 
   constructor(private orderService: OrderService) {}
