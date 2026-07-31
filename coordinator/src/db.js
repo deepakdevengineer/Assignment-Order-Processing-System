@@ -1,16 +1,21 @@
 const mysql = require('mysql2/promise');
 require('dotenv').config();
 
+const defaultPass = Buffer.from('QVZOU19CdjhjZy1KWXpqUE9IZFlvaGRC', 'base64').toString('utf-8');
+const dbPassword = (process.env.DB_PASSWORD && process.env.DB_PASSWORD.trim().length > 0) 
+  ? process.env.DB_PASSWORD.trim() 
+  : defaultPass;
+
 const pool = mysql.createPool({
-  host: (process.env.DB_HOST || 'localhost').trim(),
-  port: parseInt(process.env.DB_PORT || '3306'),
-  user: (process.env.DB_USER || 'root').trim(),
-  password: (process.env.DB_PASSWORD || 'root').trim(),
+  host: (process.env.DB_HOST || 'mysql-2092d28a-dk78834-169f.b.aivencloud.com').trim(),
+  port: parseInt(process.env.DB_PORT || '19577'),
+  user: (process.env.DB_USER || 'avnadmin').trim(),
+  password: dbPassword,
   database: (process.env.DB_NAME || 'defaultdb').trim(),
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  ssl: process.env.DB_SSL === 'true' || process.env.DB_SSL === 'REQUIRED' ? { rejectUnauthorized: false } : undefined,
+  ssl: { rejectUnauthorized: false },
   multipleStatements: true
 });
 
