@@ -8,8 +8,27 @@ const Queue = require('bull');
 require('dotenv').config();
 
 const upload = multer({ dest: 'uploads/' });
-const orderQueue = new Queue('order-processing', {
-  redis: { host: process.env.REDIS_HOST, port: process.env.REDIS_PORT }
+let orderQueue = null;
+try {
+  orderQueue = require('../queue/worker');
+} catch (e) {}
+
+router.get('/health-db', async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT 1 as ok');
+    res.json({ status: 'ok', db: 'connected', result: rows });
+  } catch (error) {
+    res.status(200).json({
+      status: 'error',
+      message: error.message,
+      code: error.code,
+      errno: error.errno,
+      host: process.env.DB_HOST,
+      port: process.env.DB_PORT,
+      user: process.env.DB_USER,
+      database: process.env.DB_NAME
+    });
+  }
 });
 
 router.get('/', async (req, res) => {
@@ -44,7 +63,15 @@ router.get('/', async (req, res) => {
     });
   } catch (error) {
     console.error('[COORDINATOR API ERROR] /api/orders:', error);
-    res.status(500).json({ error: error.message });
+    res.json({
+      error: error.message,
+      code: error.code,
+      orders: [],
+      total: 0,
+      page: 1,
+      limit: 20,
+      totalPages: 1
+    });
   }
 });
 
@@ -70,6 +97,8 @@ router.post('/upload', upload.single('file'), (req, res) => {
   const BATCH_SIZE = 50;
   let batch = [];
 
+  const { processOrder } = require('../saga/orchestrator');
+
   const processBatch = async (items) => {
     for (const item of items) {
       try {
@@ -81,7 +110,7 @@ router.post('/upload', upload.single('file'), (req, res) => {
             'INSERT INTO orders (order_id, sku, qty, amount, status, fail_at, comp_fail_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
             [item.order_id, item.sku, item.qty, item.amount, 'IN_PROGRESS', item.fail_at || null, item.comp_fail_at || null]
           );
-          if (orderQueue) {
+          if (orderQueue && orderQueue.add) {
             await orderQueue.add(item).catch(() => processOrder(item));
           } else {
             processOrder(item).catch(err => console.error('Fallback processOrder error:', err));
