@@ -9,6 +9,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get('/', (req, res) => res.json({ status: 'online', service: 'Coordinator Service API' }));
 app.use('/api/orders', ordersRouter);
 
 const PORT = process.env.PORT || 3000;

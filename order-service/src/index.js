@@ -7,6 +7,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get('/', (req, res) => res.json({ status: 'online', service: 'Order Service' }));
+
 app.post('/orders', async (req, res) => {
   const { order_id, sku, qty, amount, fail_at } = req.body;
   console.log(`[ORDER-SERVICE] POST /orders called with order_id=${order_id}`);

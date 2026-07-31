@@ -7,6 +7,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get('/', (req, res) => res.json({ status: 'online', service: 'Payment Service' }));
+
 app.post('/charges', async (req, res) => {
   const { order_id, amount, fail_at } = req.body;
   console.log(`[PAYMENT-SERVICE] POST /charges called for order_id=${order_id}`);

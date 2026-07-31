@@ -7,6 +7,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get('/', (req, res) => res.json({ status: 'online', service: 'Inventory Service' }));
+
 app.post('/reservations', async (req, res) => {
   const { order_id, sku, qty, fail_at } = req.body;
   console.log(`[INVENTORY-SERVICE] POST /reservations called for order_id=${order_id}`);

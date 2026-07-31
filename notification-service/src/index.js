@@ -11,6 +11,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get('/', (req, res) => res.json({ status: 'online', service: 'Notification Service' }));
+
 const PORT = process.env.PORT || 3005;
 
 // Redis client setup
@@ -55,11 +57,11 @@ async function runNotificationJob() {
   try {
     // Query coordinator_db.orders for orders marked as SHIPPED
     const [shippedOrders] = await coordinatorPool.query(
-      "SELECT id FROM orders WHERE status = 'SHIPPED'"
+      "SELECT order_id FROM orders WHERE status = 'SHIPPED'"
     );
 
     for (const order of shippedOrders) {
-      const orderId = order.id;
+      const orderId = order.order_id;
 
       // Check notification_db.notifications for existing entry
       const [existing] = await notificationPool.query(

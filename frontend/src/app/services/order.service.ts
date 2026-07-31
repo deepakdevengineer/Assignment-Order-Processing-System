@@ -21,7 +21,7 @@ export class OrderService {
         return 'http://localhost:3000/api';
       }
     }
-    // Default production cloud URL (Render Coordinator endpoint)
+    // Deployed Coordinator API Endpoint on Render
     return 'https://order-coordinator.onrender.com/api';
   }
 
@@ -33,7 +33,8 @@ export class OrderService {
         return 'http://localhost:3005/api';
       }
     }
-    return 'https://notification-service.onrender.com/api';
+    // Deployed Notification Service Endpoint on Render
+    return 'https://notification-service-t39v.onrender.com/api';
   }
 
   constructor(private http: HttpClient) {}

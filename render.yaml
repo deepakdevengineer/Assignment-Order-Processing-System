@@ -11,41 +11,29 @@ services:
       - key: PORT
         value: 10000
       - key: DB_HOST
-        sync: false
+        value: mysql-2092d28a-dk78834-169f.b.aivencloud.com
       - key: DB_USER
-        sync: false
+        value: avnadmin
       - key: DB_PASSWORD
         sync: false
       - key: DB_PORT
-        sync: false
+        value: "19577"
       - key: DB_NAME
-        sync: false
+        value: defaultdb
       - key: DB_SSL
         value: REQUIRED
       - key: REDIS_HOST
-        sync: false
+        value: localhost
       - key: REDIS_PORT
-        sync: false
+        value: "6379"
       - key: ORDER_SERVICE_URL
-        fromService:
-          type: web
-          name: order-microservice
-          property: host
+        value: https://order-microservice-sayv.onrender.com
       - key: INVENTORY_SERVICE_URL
-        fromService:
-          type: web
-          name: inventory-microservice
-          property: host
+        value: https://inventory-microservice-fk91.onrender.com
       - key: PAYMENT_SERVICE_URL
-        fromService:
-          type: web
-          name: payment-microservice
-          property: host
+        value: https://payment-microservice-7iin.onrender.com
       - key: SHIPPING_SERVICE_URL
-        fromService:
-          type: web
-          name: shipping-microservice
-          property: host
+        value: https://shipping-microservice.onrender.com
 
   # Order Service
   - type: web
@@ -58,15 +46,15 @@ services:
       - key: PORT
         value: 10000
       - key: DB_HOST
-        sync: false
+        value: mysql-2092d28a-dk78834-169f.b.aivencloud.com
       - key: DB_USER
-        sync: false
+        value: avnadmin
       - key: DB_PASSWORD
         sync: false
       - key: DB_PORT
-        sync: false
+        value: "19577"
       - key: DB_NAME
-        sync: false
+        value: defaultdb
       - key: DB_SSL
         value: REQUIRED
 
@@ -81,15 +69,15 @@ services:
       - key: PORT
         value: 10000
       - key: DB_HOST
-        sync: false
+        value: mysql-2092d28a-dk78834-169f.b.aivencloud.com
       - key: DB_USER
-        sync: false
+        value: avnadmin
       - key: DB_PASSWORD
         sync: false
       - key: DB_PORT
-        sync: false
+        value: "19577"
       - key: DB_NAME
-        sync: false
+        value: defaultdb
       - key: DB_SSL
         value: REQUIRED
 
@@ -104,15 +92,15 @@ services:
       - key: PORT
         value: 10000
       - key: DB_HOST
-        sync: false
+        value: mysql-2092d28a-dk78834-169f.b.aivencloud.com
       - key: DB_USER
-        sync: false
+        value: avnadmin
       - key: DB_PASSWORD
         sync: false
       - key: DB_PORT
-        sync: false
+        value: "19577"
       - key: DB_NAME
-        sync: false
+        value: defaultdb
       - key: DB_SSL
         value: REQUIRED
 
@@ -127,15 +115,15 @@ services:
       - key: PORT
         value: 10000
       - key: DB_HOST
-        sync: false
+        value: mysql-2092d28a-dk78834-169f.b.aivencloud.com
       - key: DB_USER
-        sync: false
+        value: avnadmin
       - key: DB_PASSWORD
         sync: false
       - key: DB_PORT
-        sync: false
+        value: "19577"
       - key: DB_NAME
-        sync: false
+        value: defaultdb
       - key: DB_SSL
         value: REQUIRED
 
@@ -150,14 +138,14 @@ services:
       - key: PORT
         value: 10000
       - key: DB_HOST
-        sync: false
+        value: mysql-2092d28a-dk78834-169f.b.aivencloud.com
       - key: DB_USER
-        sync: false
+        value: avnadmin
       - key: DB_PASSWORD
         sync: false
       - key: DB_PORT
-        sync: false
+        value: "19577"
       - key: DB_NAME
-        sync: false
+        value: defaultdb
       - key: DB_SSL
         value: REQUIRED
