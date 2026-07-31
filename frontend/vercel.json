@@ -1,6 +1,7 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
+  "installCommand": "npm install --include=dev",
+  "buildCommand": "npx ng build",
   "outputDirectory": "dist/frontend/browser",
   "framework": "angular",
   "routes": [
