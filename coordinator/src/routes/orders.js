@@ -4,14 +4,9 @@ const multer = require('multer');
 const csv = require('csv-parser');
 const fs = require('fs');
 const db = require('../db');
-const Queue = require('bull');
 require('dotenv').config();
 
 const upload = multer({ dest: 'uploads/' });
-let orderQueue = null;
-try {
-  orderQueue = require('../queue/worker');
-} catch (e) {}
 
 router.get('/health-db', async (req, res) => {
   try {
@@ -89,64 +84,52 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/upload', upload.single('file'), (req, res) => {
+router.post('/upload', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-  let totalQueued = 0;
-  let skipped = 0;
-  const BATCH_SIZE = 50;
-  let batch = [];
-
+  const rows = [];
   const { processOrder } = require('../saga/orchestrator');
 
-  const processBatch = async (items) => {
-    for (const item of items) {
+  try {
+    await new Promise((resolve, reject) => {
+      fs.createReadStream(req.file.path)
+        .pipe(csv())
+        .on('data', (data) => rows.push(data))
+        .on('end', resolve)
+        .on('error', reject);
+    });
+
+    try { fs.unlinkSync(req.file.path); } catch (e) {}
+
+    let totalQueued = 0;
+    let skipped = 0;
+
+    for (const item of rows) {
+      if (!item.order_id) continue;
       try {
-        const [rows] = await db.query('SELECT order_id FROM orders WHERE order_id = ?', [item.order_id]);
-        if (rows && rows.length > 0) {
+        const [existing] = await db.query('SELECT order_id FROM orders WHERE order_id = ?', [item.order_id]);
+        if (existing && existing.length > 0) {
           skipped++;
         } else {
           await db.query(
             'INSERT INTO orders (order_id, sku, qty, amount, status, fail_at, comp_fail_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [item.order_id, item.sku, item.qty, item.amount, 'IN_PROGRESS', item.fail_at || null, item.comp_fail_at || null]
+            [item.order_id, item.sku, parseInt(item.qty) || 1, parseFloat(item.amount) || 0, 'IN_PROGRESS', item.fail_at || null, item.comp_fail_at || null]
           );
-          if (orderQueue && orderQueue.add) {
-            await orderQueue.add(item).catch(() => processOrder(item));
-          } else {
-            processOrder(item).catch(err => console.error('Fallback processOrder error:', err));
-          }
           totalQueued++;
+
+          // Asynchronously trigger saga orchestrator for each order
+          processOrder(item).catch(err => console.error(`[SAGA ERROR] Order ${item.order_id}:`, err.message));
         }
       } catch (err) {
-        console.error('Error processing row', err);
+        console.error('[UPLOAD ROW ERROR]:', item.order_id, err.message);
       }
     }
-  };
 
-  const stream = fs.createReadStream(req.file.path).pipe(csv());
-
-  stream.on('data', async (row) => {
-    batch.push(row);
-    if (batch.length >= BATCH_SIZE) {
-      stream.pause();
-      const currentBatch = [...batch];
-      batch = [];
-      await processBatch(currentBatch);
-      stream.resume();
-    }
-  });
-
-  stream.on('end', async () => {
-    if (batch.length > 0) {
-      await processBatch(batch);
-    }
-    try { fs.unlinkSync(req.file.path); } catch (e) {}
-    res.json({ message: 'Upload started', totalQueued, skipped });
-  });
-
-  stream.on('error', (err) => {
-    res.status(500).json({ error: err.message });
-  });
+    res.json({ message: 'Upload completed', totalQueued, skipped });
+  } catch (error) {
+    console.error('[COORDINATOR CSV UPLOAD ERROR]:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 router.patch('/:id/ship', async (req, res) => {
