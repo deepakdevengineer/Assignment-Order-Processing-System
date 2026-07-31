@@ -14,46 +14,50 @@ const orderQueue = new Queue('order-processing', {
 
 router.get('/', async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit) || 20));
     const offset = (page - 1) * limit;
     const status = req.query.status;
 
     let countQuery = 'SELECT COUNT(*) as total FROM orders';
-    let dataQuery = 'SELECT * FROM orders ORDER BY created_at DESC LIMIT ? OFFSET ?';
     let countParams = [];
-    let dataParams = [limit, offset];
+    let whereClause = '';
 
     if (status) {
-      countQuery += ' WHERE status = ?';
-      dataQuery = 'SELECT * FROM orders WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?';
+      whereClause = ' WHERE status = ?';
+      countQuery += whereClause;
       countParams.push(status);
-      dataParams.unshift(status);
     }
 
-    const [[{ total }]] = await db.query(countQuery, countParams);
-    const [orders] = await db.query(dataQuery, dataParams);
+    const [countRows] = await db.query(countQuery, countParams);
+    const total = (countRows && countRows[0] && countRows[0].total !== undefined) ? Number(countRows[0].total) : 0;
+
+    let dataQuery = `SELECT * FROM orders${whereClause} ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`;
+    const [orders] = await db.query(dataQuery, countParams);
 
     res.json({
-      orders,
+      orders: orders || [],
       total,
       page,
       limit,
-      totalPages: Math.ceil(total / limit)
+      totalPages: Math.max(1, Math.ceil(total / limit))
     });
   } catch (error) {
+    console.error('[COORDINATOR API ERROR] /api/orders:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 router.get('/:id', async (req, res) => {
   try {
-    const [[order]] = await db.query('SELECT * FROM orders WHERE order_id = ?', [req.params.id]);
+    const [orders] = await db.query('SELECT * FROM orders WHERE order_id = ?', [req.params.id]);
+    const order = orders && orders[0] ? orders[0] : null;
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
     const [steps] = await db.query('SELECT * FROM order_steps WHERE order_id = ? ORDER BY started_at ASC', [req.params.id]);
-    res.json({ order, steps });
+    res.json({ order, steps: steps || [] });
   } catch (error) {
+    console.error('[COORDINATOR API ERROR] /api/orders/:id:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -69,8 +73,8 @@ router.post('/upload', upload.single('file'), (req, res) => {
   const processBatch = async (items) => {
     for (const item of items) {
       try {
-        const [[existing]] = await db.query('SELECT order_id FROM orders WHERE order_id = ?', [item.order_id]);
-        if (existing) {
+        const [rows] = await db.query('SELECT order_id FROM orders WHERE order_id = ?', [item.order_id]);
+        if (rows && rows.length > 0) {
           skipped++;
         } else {
           await db.query(
@@ -103,7 +107,7 @@ router.post('/upload', upload.single('file'), (req, res) => {
     if (batch.length > 0) {
       await processBatch(batch);
     }
-    fs.unlinkSync(req.file.path);
+    try { fs.unlinkSync(req.file.path); } catch (e) {}
     res.json({ message: 'Upload started', totalQueued, skipped });
   });
 
@@ -125,13 +129,14 @@ router.patch('/:id/ship', async (req, res) => {
 router.post('/:id/retry', async (req, res) => {
   try {
     const { id } = req.params;
-    const [[order]] = await db.query('SELECT * FROM orders WHERE order_id = ?', [id]);
+    const [orders] = await db.query('SELECT * FROM orders WHERE order_id = ?', [id]);
+    const order = orders && orders[0] ? orders[0] : null;
     if (!order || order.status !== 'NEEDS_ATTENTION') {
       return res.status(400).json({ error: 'Order not found or not NEEDS_ATTENTION' });
     }
 
     const [steps] = await db.query('SELECT * FROM order_steps WHERE order_id = ?', [id]);
-    const failedUndoSteps = steps.filter(s => s.status === 'FAILED' && s.step_name.startsWith('UNDO_'));
+    const failedUndoSteps = (steps || []).filter(s => s.status === 'FAILED' && s.step_name.startsWith('UNDO_'));
     
     if (failedUndoSteps.length === 0) {
       return res.status(400).json({ error: 'No failed UNDO steps found' });
@@ -146,17 +151,20 @@ router.post('/:id/retry', async (req, res) => {
       if (stepName === 'CREATE_ORDER') {
         result = await runCompensation(id, 'CREATE_ORDER', async () => require('axios').delete(`${process.env.ORDER_SERVICE_URL}/orders/${id}`, { data: { comp_fail_at: order.comp_fail_at } }));
       } else if (stepName === 'RESERVE_INVENTORY') {
-        const [[invStep]] = await db.query('SELECT response_data FROM order_steps WHERE order_id = ? AND step_name = ?', [id, 'RESERVE_INVENTORY']);
+        const [invSteps] = await db.query('SELECT response_data FROM order_steps WHERE order_id = ? AND step_name = ?', [id, 'RESERVE_INVENTORY']);
+        const invStep = invSteps && invSteps[0] ? invSteps[0] : null;
         const resData = invStep?.response_data ? JSON.parse(invStep.response_data) : {};
         const resId = resData.id || id; 
         result = await runCompensation(id, 'RESERVE_INVENTORY', async () => require('axios').delete(`${process.env.INVENTORY_SERVICE_URL}/reservations/${resId}`, { data: { comp_fail_at: order.comp_fail_at } }));
       } else if (stepName === 'CHARGE_PAYMENT') {
-        const [[payStep]] = await db.query('SELECT response_data FROM order_steps WHERE order_id = ? AND step_name = ?', [id, 'CHARGE_PAYMENT']);
+        const [paySteps] = await db.query('SELECT response_data FROM order_steps WHERE order_id = ? AND step_name = ?', [id, 'CHARGE_PAYMENT']);
+        const payStep = paySteps && paySteps[0] ? paySteps[0] : null;
         const resData = payStep?.response_data ? JSON.parse(payStep.response_data) : {};
         const resId = resData.id || id;
         result = await runCompensation(id, 'CHARGE_PAYMENT', async () => require('axios').delete(`${process.env.PAYMENT_SERVICE_URL}/charges/${resId}`, { data: { comp_fail_at: order.comp_fail_at } }));
       } else if (stepName === 'CREATE_SHIPMENT') {
-        const [[shipStep]] = await db.query('SELECT response_data FROM order_steps WHERE order_id = ? AND step_name = ?', [id, 'CREATE_SHIPMENT']);
+        const [shipSteps] = await db.query('SELECT response_data FROM order_steps WHERE order_id = ? AND step_name = ?', [id, 'CREATE_SHIPMENT']);
+        const shipStep = shipSteps && shipSteps[0] ? shipSteps[0] : null;
         const resData = shipStep?.response_data ? JSON.parse(shipStep.response_data) : {};
         const resId = resData.id || id;
         result = await runCompensation(id, 'CREATE_SHIPMENT', async () => require('axios').delete(`${process.env.SHIPPING_SERVICE_URL}/shipments/${resId}`, { data: { comp_fail_at: order.comp_fail_at } }));
