@@ -1,0 +1,101 @@
+# Render Blueprint file for 100% Free deployment
+services:
+  # Coordinator Service (Main API & Saga Orchestrator)
+  - type: web
+    name: order-coordinator
+    env: node
+    buildCommand: cd coordinator && npm install
+    startCommand: cd coordinator && node src/index.js
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: DB_HOST
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: REDIS_HOST
+        sync: false
+      - key: REDIS_PORT
+        sync: false
+      - key: ORDER_SERVICE_URL
+        fromService:
+          type: web
+          name: order-microservice
+          property: host
+      - key: INVENTORY_SERVICE_URL
+        fromService:
+          type: web
+          name: inventory-microservice
+          property: host
+      - key: PAYMENT_SERVICE_URL
+        fromService:
+          type: web
+          name: payment-microservice
+          property: host
+      - key: SHIPPING_SERVICE_URL
+        fromService:
+          type: web
+          name: shipping-microservice
+          property: host
+
+  # Order Service
+  - type: web
+    name: order-microservice
+    env: node
+    buildCommand: cd order-service && npm install
+    startCommand: cd order-service && node src/index.js
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: DB_HOST
+        sync: false
+
+  # Inventory Service
+  - type: web
+    name: inventory-microservice
+    env: node
+    buildCommand: cd inventory-service && npm install
+    startCommand: cd inventory-service && node src/index.js
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: DB_HOST
+        sync: false
+
+  # Payment Service
+  - type: web
+    name: payment-microservice
+    env: node
+    buildCommand: cd payment-service && npm install
+    startCommand: cd payment-service && node src/index.js
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: DB_HOST
+        sync: false
+
+  # Shipping Service
+  - type: web
+    name: shipping-microservice
+    env: node
+    buildCommand: cd shipping-service && npm install
+    startCommand: cd shipping-service && node src/index.js
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: DB_HOST
+        sync: false
+
+  # Notification Service
+  - type: web
+    name: notification-service
+    env: node
+    buildCommand: cd notification-service && npm install
+    startCommand: cd notification-service && node src/index.js
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: DB_HOST
+        sync: false
