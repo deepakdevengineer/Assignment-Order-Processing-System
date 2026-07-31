@@ -3,10 +3,10 @@
   "buildCommand": "cd frontend && npm install --include=dev && npx ng build",
   "outputDirectory": "frontend/dist/frontend/browser",
   "framework": "angular",
-  "routes": [
+  "rewrites": [
     {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
