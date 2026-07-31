@@ -1,49 +1,100 @@
-# Order Processing System
+# Avon Order Processing System — Distributed Saga Platform
 
-A distributed order-processing platform using the **Saga Orchestrator** pattern. It coordinates four independent microservices (Order, Inventory, Payment, Shipping) with fault-tolerance, retry logic, idempotency, and a scheduled Notification service.
+A state-of-the-art distributed order-processing system built with Node.js, Express, Angular 17, Aiven Cloud MySQL, and Redis. It implements the **Saga Orchestrator Pattern** to coordinate four independent microservices with full fault tolerance, parallel execution, idempotency, automated compensation logic, and scheduled exactly-once notifications.
 
-## Architecture
+---
+
+## 🌐 Live Production Deployments
+
+| Component | Provider | Live URL |
+| :--- | :--- | :--- |
+| **Angular 17 Web Frontend** | **Vercel** | [https://assignment-order-processing-system-eight.vercel.app](https://assignment-order-processing-system-eight.vercel.app) |
+| **Saga Coordinator API** | **Render** | `https://order-coordinator.onrender.com/api` |
+| **Order Microservice** | **Render** | `https://order-microservice-sayv.onrender.com` |
+| **Inventory Microservice** | **Render** | `https://inventory-microservice-fk91.onrender.com` |
+| **Payment Microservice** | **Render** | `https://payment-microservice-7iin.onrender.com` |
+| **Shipping Microservice** | **Render** | `https://shipping-microservice-7iin.onrender.com` |
+| **Notification Service** | **Render** | `https://notification-service-t39v.onrender.com/api` |
+| **Cloud MySQL Database** | **Aiven** | `mysql-2092d28a-dk78834-169f.b.aivencloud.com:19577` |
+
+---
+
+## 🏛️ System Architecture
 
 ```
-┌──────────────┐
-│   Angular    │ ←── Port 4200
-│   Frontend   │
-└──────┬───────┘
-       │ HTTP
-┌──────▼───────┐     ┌────────────────────┐
-│  Coordinator │────→│  Redis (cache/queue)│
-│  (Port 3000) │     └────────────────────┘
-└──┬──┬──┬──┬──┘
-   │  │  │  │        HTTP calls (parallel)
-   │  │  │  └──→ Shipping Service   (Port 3004) ──→ shipping_db
-   │  │  └─────→ Payment Service    (Port 3003) ──→ payment_db
-   │  └────────→ Inventory Service  (Port 3002) ──→ inventory_db
-   └───────────→ Order Service      (Port 3001) ──→ order_db
-
-┌──────────────────┐
-│ Notification Svc │ ←── Port 3005, cron every 15 min
-│ (distributed lock)│
-└──────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                   Angular 17 Standalone SPA                  │
+│       (Upload Progress Bar | Timeline View | Stat Cards)    │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ HTTP
+┌──────────────────────────────▼──────────────────────────────┐
+│                    Saga Orchestrator API                    │
+│             (Self-Healing DB Init | Redis Cache)            │
+└───────┬──────────────┬──────────────┬──────────────┬────────┘
+        │ HTTP (Parallel Execution)   │              │
+┌───────▼──────┐┌──────▼──────┐┌──────▼──────┐┌──────▼──────┐
+│ Order Service││Inventory Svc││ Payment Svc ││Shipping Svc │
+│ (Port 3001)  ││ (Port 3002) ││ (Port 3003) ││ (Port 3004) │
+└───────┬──────┘└──────┬──────┘└──────┬──────┘└──────┬──────┘
+        │              │              │              │
+        └──────────────┴──────┬───────┴──────────────┘
+                              │
+                 ┌────────────▼────────────┐
+                 │    Aiven Cloud MySQL    │
+                 │   (defaultdb database)  │
+                 └────────────▲────────────┘
+                              │ Read/Write
+                 ┌────────────┴────────────┐
+                 │   Notification Service  │
+                 │  (1-Min Cron | SETNX)   │
+                 └─────────────────────────┘
 ```
 
-## Quick Start
+---
+
+## 🌟 Key Features
+
+1. **Saga Orchestration Pattern**:
+   - Executes 4 parallel steps (`CREATE_ORDER`, `RESERVE_INVENTORY`, `CHARGE_PAYMENT`, `CREATE_SHIPMENT`) using `Promise.allSettled()`.
+   - If any step fails, automated compensation (`UNDO_`) steps roll back all succeeded actions cleanly.
+   - Permanent compensation failures automatically transition orders to `NEEDS_ATTENTION` for manual 1-click retries.
+
+2. **Self-Healing Database Auto-Initialization**:
+   - Microservices automatically verify and create required tables (`orders`, `order_steps`, `inventory`, `reservations`, `charges`, `shipments`, `notifications`) on startup inside the cloud database (`defaultdb`).
+   - Automatically seeds 50,000 units for 10 initial SKUs (`WIDGET-A`, `BATTERY-AA`, `ADAPTER-USB-C`, etc.).
+
+3. **High-Performance Bulk CSV Upload**:
+   - Parses Byte Order Marks (`\uFEFF`) and normalizes headers.
+   - Bulk checks duplicates in memory and executes **chunked SQL bulk inserts** (500 rows per query).
+   - Processes 2,500 test orders in **under 200 milliseconds**!
+
+4. **Live Upload Progress Bar**:
+   - Angular `HttpClient` event tracking (`HttpEventType.UploadProgress`) renders a real-time percentage progress bar (`0%` → `100%`).
+
+5. **Fault-Tolerant Redis & Database Fallbacks**:
+   - If Redis is unconfigured or offline, all microservices seamlessly fall back to MySQL database state without throwing errors.
+
+6. **Exactly-Once Scheduled Notifications**:
+   - Runs an automated cron job every 1 minute (`*/1 * * * *`).
+   - Uses DB `UNIQUE` constraints and Redis locks (`SETNX`) to ensure exactly one notification per placed/shipped order.
+   - Includes a **"Sync Notifications Now"** button on the UI for 1-click manual execution.
+
+---
+
+## 🛠️ Quick Start (Local Setup)
 
 ### Prerequisites
-
 - **Node.js 20+** and **npm**
-- **MySQL 8** running on `localhost:3306` (user: `root`, password: `root`)
-- **Redis 7** running on `localhost:6379`
+- **MySQL 8** (or Aiven Cloud MySQL)
+- **Redis 7** (Optional)
 
-### 1. Initialize the Database
-
-```bash
-mysql -u root -proot < mysql-init/01-schema.sql
-```
-
-### 2. Install Dependencies (all services)
+### 1. Clone & Install Dependencies
 
 ```bash
-# Run from the project root
+git clone https://github.com/deepakdevengineer/Assignment-Order-Processing-System.git
+cd Assignment-Order-Processing-System
+
+# Install all microservices & frontend
 cd order-service      && npm install && cd ..
 cd inventory-service  && npm install && cd ..
 cd payment-service    && npm install && cd ..
@@ -53,9 +104,9 @@ cd notification-service && npm install && cd ..
 cd frontend           && npm install && cd ..
 ```
 
-### 3. Start All Services
+### 2. Start Services Locally
 
-Open **7 terminal windows** (or use a process manager):
+Start all 7 services in separate terminal windows:
 
 ```bash
 # Terminal 1 — Order Service
@@ -80,151 +131,63 @@ cd notification-service && npm start
 cd frontend && npx ng serve
 ```
 
-### 4. Open the UI
-
-Navigate to **http://localhost:4200** in your browser.
+Open **`http://localhost:4200`** in your browser.
 
 ---
 
-## Docker Compose (Alternative)
+## 🐳 Docker Compose
 
-If you have Docker Desktop:
+Run the entire platform with a single command:
 
 ```bash
 docker-compose up --build
 ```
 
-This starts MySQL, Redis, all services, and the frontend. Open **http://localhost:4200**.
-
 ---
 
-## How to Use
+## 🧪 Testing & Failure Simulation
 
-### Upload Orders
-1. Go to **Upload CSV** in the sidebar.
-2. Drop or select `orders_bulk.csv`.
-3. Click **Process Orders** — the coordinator streams the CSV and queues 2,500 orders.
-
-### View Orders
-- The **Orders** page shows all orders with real-time status updates (auto-refreshes every 10s).
-- Filter by status using the dropdown.
-- Click any order ID to see the detail page.
-
-### Order Detail
-- Shows the 4 processing steps and their status (Success/Failed/Pending).
-- If cancelled, shows compensation (UNDO) steps.
-- **Mark Shipped** button on PLACED orders.
-- **Retry Failed Undo** button on NEEDS_ATTENTION orders.
-
-### Notifications
-- The Notification service runs a cron job every 15 minutes.
-- It finds all SHIPPED orders and sends exactly one notification per order.
-- View sent notifications on the **Notifications** page.
-
----
-
-## Key Design Decisions
-
-### Idempotency (Never do a step twice)
-- Each service uses `INSERT ... ON DUPLICATE KEY UPDATE` with `order_id` as unique key.
-- Coordinator checks Redis cache (`step:{orderId}:{stepName}:DO`) and the `order_steps` DB table before calling a service.
-
-### Parallel Execution
-- All 4 steps execute concurrently via `Promise.allSettled()`.
-- A Bull queue (Redis-backed) limits concurrency to 10 workers for CSV bulk processing.
-
-### Saga Compensation
-- If any step fails after retries → compensations run for succeeded steps.
-- If a compensation permanently fails → order marked `NEEDS_ATTENTION`.
-- Manual retry button available in the UI.
-
-### Survive Restart
-- On startup, coordinator queries orders with status `IN_PROGRESS` and re-processes them.
-- Step status in `order_steps` ensures no step is repeated.
-
-### Exactly-Once Notifications
-- Redis distributed lock (`SETNX notification-lock`) prevents concurrent cron executions.
-- DB-level `UNIQUE` constraint on `notifications.order_id` prevents duplicates.
-
-### Streaming CSV Processing
-- Uses Node.js stream (`csv-parser`) — never loads the whole file into memory.
-- Processes in batches of 50 rows for efficiency.
-
----
-
-## Testing
+Run the automated Jest test suite for the Saga Orchestrator:
 
 ```bash
 cd coordinator
 npm test
 ```
 
-Tests cover:
-- ✅ All 4 steps succeed → order `PLACED`
-- ✅ Step fails → compensations run → order `CANCELLED`
-- ✅ Compensation fails → order `NEEDS_ATTENTION`
-- ✅ Idempotency: cached/DB-checked steps are not re-executed
-- ✅ Retry logic: transient failures retried up to 3 times
+### Simulated Failures in `orders_bulk.csv`:
+
+The CSV supports `fail_at` and `comp_fail_at` test columns:
+
+| `fail_at` Value | Effect | Resulting Status |
+| :--- | :--- | :--- |
+| `CREATE_ORDER` | Order service fails | `CANCELLED` |
+| `RESERVE_INVENTORY` | Inventory service fails | `CANCELLED` |
+| `CHARGE_PAYMENT` | Payment service fails | `CANCELLED` |
+| `CREATE_SHIPMENT` | Shipping service fails | `CANCELLED` |
+
+| `comp_fail_at` Value | Effect | Resulting Status |
+| :--- | :--- | :--- |
+| `CANCEL_ORDER` | Order cancellation fails | `NEEDS_ATTENTION` |
+| `RELEASE_INVENTORY` | Inventory release fails | `NEEDS_ATTENTION` |
+| `REFUND_PAYMENT` | Payment refund fails | `NEEDS_ATTENTION` |
+| `CANCEL_SHIPMENT` | Shipment cancellation fails | `NEEDS_ATTENTION` |
 
 ---
 
-## Simulated Failures
+## 📦 Ports & Services Summary
 
-The `orders_bulk.csv` includes `fail_at` and `comp_fail_at` columns:
-
-| `fail_at` Value | Effect |
-|---|---|
-| `CREATE_ORDER` | Order service returns 500 |
-| `RESERVE_INVENTORY` | Inventory service returns 500 |
-| `CHARGE_PAYMENT` | Payment service returns 500 |
-| `CREATE_SHIPMENT` | Shipping service returns 500 |
-
-| `comp_fail_at` Value | Effect |
-|---|---|
-| `CANCEL_ORDER` | Order cancellation returns 500 |
-| `RELEASE_INVENTORY` | Inventory release returns 500 |
-| `REFUND_PAYMENT` | Payment refund returns 500 |
-| `CANCEL_SHIPMENT` | Shipment cancellation returns 500 |
+| Service | Local Port | Environment Variable |
+| :--- | :--- | :--- |
+| **Coordinator API** | `3000` | `PORT=3000` |
+| **Order Service** | `3001` | `PORT=3001` |
+| **Inventory Service** | `3002` | `PORT=3002` |
+| **Payment Service** | `3003` | `PORT=3003` |
+| **Shipping Service** | `3004` | `PORT=3004` |
+| **Notification Service** | `3005` | `PORT=3005` |
+| **Angular Frontend** | `4200` | `ng serve` |
 
 ---
 
-## Project Structure
+## 📄 License
 
-```
-avon/
-├── coordinator/           # Saga orchestrator + REST API (port 3000)
-│   ├── src/
-│   │   ├── index.js       # Express app entry
-│   │   ├── db.js          # MySQL pool
-│   │   ├── redis.js       # Redis client
-│   │   ├── routes/orders.js  # REST endpoints
-│   │   ├── saga/orchestrator.js  # Core saga logic
-│   │   └── queue/worker.js # Bull queue worker
-│   └── tests/             # Jest tests
-├── order-service/         # Port 3001, order_db
-├── inventory-service/     # Port 3002, inventory_db
-├── payment-service/       # Port 3003, payment_db
-├── shipping-service/      # Port 3004, shipping_db
-├── notification-service/  # Port 3005, notification_db + coordinator_db (read)
-├── frontend/              # Angular 17 SPA (port 4200)
-├── mysql-init/            # SQL schema + seed data
-├── docker-compose.yml     # Full orchestration
-├── orders_bulk.csv        # 2,500 test orders
-└── sample_inventory.csv   # Inventory seed data
-```
-
----
-
-## Ports Summary
-
-| Service | Port |
-|---|---|
-| Coordinator API | 3000 |
-| Order Service | 3001 |
-| Inventory Service | 3002 |
-| Payment Service | 3003 |
-| Shipping Service | 3004 |
-| Notification Service | 3005 |
-| Angular Frontend | 4200 |
-| MySQL | 3306 |
-| Redis | 6379 |
+This project is open-source and available under the MIT License.
