@@ -13,7 +13,28 @@ import {
   providedIn: 'root'
 })
 export class OrderService {
-  private apiUrl = 'http://localhost:3000/api';
+  private get baseUrl(): string {
+    if (typeof window !== 'undefined') {
+      const customApi = localStorage.getItem('API_URL');
+      if (customApi) return customApi;
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'http://localhost:3000/api';
+      }
+    }
+    // Default production cloud URL (Render Coordinator endpoint)
+    return 'https://order-coordinator.onrender.com/api';
+  }
+
+  private get notificationUrl(): string {
+    if (typeof window !== 'undefined') {
+      const customNotifApi = localStorage.getItem('NOTIFICATION_API_URL');
+      if (customNotifApi) return customNotifApi;
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'http://localhost:3005/api';
+      }
+    }
+    return 'https://notification-service.onrender.com/api';
+  }
 
   constructor(private http: HttpClient) {}
 
@@ -24,28 +45,28 @@ export class OrderService {
     if (status) {
       params = params.set('status', status);
     }
-    return this.http.get<OrdersResponse>(`${this.apiUrl}/orders`, { params });
+    return this.http.get<OrdersResponse>(`${this.baseUrl}/orders`, { params });
   }
 
   getOrderDetail(id: string): Observable<OrderDetailResponse> {
-    return this.http.get<OrderDetailResponse>(`${this.apiUrl}/orders/${id}`);
+    return this.http.get<OrderDetailResponse>(`${this.baseUrl}/orders/${id}`);
   }
 
   uploadCsv(file: File): Observable<UploadResponse> {
     const formData = new FormData();
     formData.append('file', file);
-    return this.http.post<UploadResponse>(`${this.apiUrl}/orders/upload`, formData);
+    return this.http.post<UploadResponse>(`${this.baseUrl}/orders/upload`, formData);
   }
 
   markShipped(id: string): Observable<any> {
-    return this.http.patch(`${this.apiUrl}/orders/${id}/ship`, {});
+    return this.http.patch(`${this.baseUrl}/orders/${id}/ship`, {});
   }
 
   retryCompensation(id: string): Observable<any> {
-    return this.http.post(`${this.apiUrl}/orders/${id}/retry`, {});
+    return this.http.post(`${this.baseUrl}/orders/${id}/retry`, {});
   }
 
   getNotifications(): Observable<Notification[]> {
-    return this.http.get<Notification[]>('http://localhost:3005/api/notifications');
+    return this.http.get<Notification[]>(`${this.notificationUrl}/notifications`);
   }
 }
