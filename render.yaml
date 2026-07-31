@@ -1,9 +1,10 @@
-# Render Blueprint file for 100% Free deployment
+# Render Blueprint file for 100% FREE deployment
 services:
   # Coordinator Service (Main API & Saga Orchestrator)
   - type: web
     name: order-coordinator
     env: node
+    plan: free
     buildCommand: cd coordinator && npm install
     startCommand: cd coordinator && node src/index.js
     envVars:
@@ -15,6 +16,12 @@ services:
         sync: false
       - key: DB_PASSWORD
         sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_SSL
+        value: REQUIRED
       - key: REDIS_HOST
         sync: false
       - key: REDIS_PORT
@@ -44,6 +51,7 @@ services:
   - type: web
     name: order-microservice
     env: node
+    plan: free
     buildCommand: cd order-service && npm install
     startCommand: cd order-service && node src/index.js
     envVars:
@@ -51,11 +59,22 @@ services:
         value: 10000
       - key: DB_HOST
         sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_SSL
+        value: REQUIRED
 
   # Inventory Service
   - type: web
     name: inventory-microservice
     env: node
+    plan: free
     buildCommand: cd inventory-service && npm install
     startCommand: cd inventory-service && node src/index.js
     envVars:
@@ -63,11 +82,22 @@ services:
         value: 10000
       - key: DB_HOST
         sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_SSL
+        value: REQUIRED
 
   # Payment Service
   - type: web
     name: payment-microservice
     env: node
+    plan: free
     buildCommand: cd payment-service && npm install
     startCommand: cd payment-service && node src/index.js
     envVars:
@@ -75,11 +105,22 @@ services:
         value: 10000
       - key: DB_HOST
         sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_SSL
+        value: REQUIRED
 
   # Shipping Service
   - type: web
     name: shipping-microservice
     env: node
+    plan: free
     buildCommand: cd shipping-service && npm install
     startCommand: cd shipping-service && node src/index.js
     envVars:
@@ -87,11 +128,22 @@ services:
         value: 10000
       - key: DB_HOST
         sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_SSL
+        value: REQUIRED
 
   # Notification Service
   - type: web
     name: notification-service
     env: node
+    plan: free
     buildCommand: cd notification-service && npm install
     startCommand: cd notification-service && node src/index.js
     envVars:
@@ -99,3 +151,13 @@ services:
         value: 10000
       - key: DB_HOST
         sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_SSL
+        value: REQUIRED
