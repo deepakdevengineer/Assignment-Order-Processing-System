@@ -63,19 +63,22 @@ import { OrderService } from '../../services/order.service';
         </div>
       </div>
 
-      <!-- Uploading State with Percentage Progress Bar -->
+      <!-- Uploading State with Smooth Progress Bar -->
       <div class="upload-card card uploading-state" *ngIf="uploading">
         <div class="upload-progress">
           <div class="progress-circle-wrapper">
             <div class="spinner" style="width:56px; height:56px; border-width:4px;"></div>
             <span class="progress-percentage">{{ uploadProgress }}%</span>
           </div>
-          <h3>Uploading and Processing Orders...</h3>
-          <p class="progress-subtitle" *ngIf="uploadProgress < 100">
+          <h3>Uploading & Processing Orders...</h3>
+          <p class="progress-subtitle" *ngIf="uploadProgress < 65">
             Uploading CSV file ({{ uploadProgress }}% complete)
           </p>
+          <p class="progress-subtitle" *ngIf="uploadProgress >= 65 && uploadProgress < 100">
+            Saving orders in Aiven Cloud MySQL & starting Saga Orchestration...
+          </p>
           <p class="progress-subtitle" *ngIf="uploadProgress === 100">
-            Saving orders into cloud database & starting Saga Orchestration...
+            Finalizing order queuing...
           </p>
 
           <!-- Linear Animated Progress Bar -->
@@ -404,19 +407,30 @@ export class UploadComponent {
     this.uploadProgress = 0;
     this.errorMessage = '';
 
+    // Smooth visual progress increments while uploading & processing
+    const progressTimer = setInterval(() => {
+      if (this.uploadProgress < 90) {
+        this.uploadProgress += Math.floor(Math.random() * 12) + 6;
+        if (this.uploadProgress > 90) this.uploadProgress = 90;
+      }
+    }, 120);
+
     this.orderService.uploadCsv(this.selectedFile).subscribe({
       next: (event: any) => {
-        if (event.type === HttpEventType.UploadProgress) {
-          if (event.total) {
-            this.uploadProgress = Math.round((100 * event.loaded) / event.total);
-          }
+        if (event.type === HttpEventType.UploadProgress && event.total) {
+          const raw = Math.round((90 * event.loaded) / event.total);
+          if (raw > this.uploadProgress) this.uploadProgress = raw;
         } else if (event.type === HttpEventType.Response) {
+          clearInterval(progressTimer);
           this.uploadProgress = 100;
-          this.uploading = false;
-          this.uploadResult = event.body;
+          setTimeout(() => {
+            this.uploading = false;
+            this.uploadResult = event.body;
+          }, 450);
         }
       },
       error: (err) => {
+        clearInterval(progressTimer);
         this.uploading = false;
         this.errorMessage = err.error?.message || 'Upload failed. Please try again.';
       }
