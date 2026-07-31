@@ -36,9 +36,9 @@ import { Order, OrdersResponse } from '../../models/order.model';
         </div>
       </div>
 
-      <!-- Filters -->
+      <!-- Filters & Page Size Selector -->
       <div class="filters-bar">
-        <div class="filter-group">
+        <div class="filter-group" style="display:flex; gap:12px; align-items:center;">
           <select class="form-input filter-select" [(ngModel)]="selectedStatus"
                   (change)="onFilterChange()" id="filter-status">
             <option value="">All Statuses</option>
@@ -48,10 +48,17 @@ import { Order, OrdersResponse } from '../../models/order.model';
             <option value="CANCELLED">Cancelled</option>
             <option value="NEEDS_ATTENTION">Needs Attention</option>
           </select>
+
+          <select class="form-input filter-select" [(ngModel)]="pageSize"
+                  (change)="onFilterChange()" id="filter-pagesize" style="width: 120px;">
+            <option [ngValue]="20">20 / page</option>
+            <option [ngValue]="50">50 / page</option>
+            <option [ngValue]="100">100 / page</option>
+          </select>
         </div>
         <div class="results-count" *ngIf="totalOrders > 0">
           Showing {{ ((currentPage - 1) * pageSize) + 1 }}–{{ Math.min(currentPage * pageSize, totalOrders) }}
-          of {{ totalOrders }} orders
+          of {{ totalOrders }} orders (Page {{ currentPage }} of {{ totalPages }})
         </div>
       </div>
 
@@ -135,12 +142,12 @@ import { Order, OrdersResponse } from '../../models/order.model';
         </a>
       </div>
 
-      <!-- Pagination -->
+      <!-- Enhanced Pagination for Large Datasets -->
       <div class="pagination" *ngIf="totalPages > 1">
-        <button (click)="goToPage(1)" [disabled]="currentPage === 1">
+        <button (click)="goToPage(1)" [disabled]="currentPage === 1" title="First Page">
           <span class="material-icons-round" style="font-size:18px">first_page</span>
         </button>
-        <button (click)="goToPage(currentPage - 1)" [disabled]="currentPage === 1">
+        <button (click)="goToPage(currentPage - 1)" [disabled]="currentPage === 1" title="Previous Page">
           <span class="material-icons-round" style="font-size:18px">chevron_left</span>
         </button>
 
@@ -150,10 +157,10 @@ import { Order, OrdersResponse } from '../../models/order.model';
           <span *ngIf="p === '...'" class="pagination-ellipsis">…</span>
         </ng-container>
 
-        <button (click)="goToPage(currentPage + 1)" [disabled]="currentPage === totalPages">
+        <button (click)="goToPage(currentPage + 1)" [disabled]="currentPage === totalPages" title="Next Page">
           <span class="material-icons-round" style="font-size:18px">chevron_right</span>
         </button>
-        <button (click)="goToPage(totalPages)" [disabled]="currentPage === totalPages">
+        <button (click)="goToPage(totalPages)" [disabled]="currentPage === totalPages" title="Last Page">
           <span class="material-icons-round" style="font-size:18px">last_page</span>
         </button>
       </div>

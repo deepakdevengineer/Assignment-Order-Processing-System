@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { HttpEventType } from '@angular/common/http';
@@ -63,25 +63,22 @@ import { OrderService } from '../../services/order.service';
         </div>
       </div>
 
-      <!-- Uploading State with Smooth Progress Bar -->
+      <!-- Uploading State with Smooth Progress Bar starting from 0% -->
       <div class="upload-card card uploading-state" *ngIf="uploading">
         <div class="upload-progress">
           <div class="progress-circle-wrapper">
             <div class="spinner" style="width:56px; height:56px; border-width:4px;"></div>
             <span class="progress-percentage">{{ uploadProgress }}%</span>
           </div>
-          <h3>Uploading & Processing Orders...</h3>
-          <p class="progress-subtitle" *ngIf="uploadProgress < 65">
-            Uploading CSV file ({{ uploadProgress }}% complete)
-          </p>
-          <p class="progress-subtitle" *ngIf="uploadProgress >= 65 && uploadProgress < 100">
-            Saving orders in Aiven Cloud MySQL & starting Saga Orchestration...
+          <h3>Processing Orders</h3>
+          <p class="progress-subtitle" *ngIf="uploadProgress < 100">
+            Processing orders...
           </p>
           <p class="progress-subtitle" *ngIf="uploadProgress === 100">
-            Finalizing order queuing...
+            Complete!
           </p>
 
-          <!-- Linear Animated Progress Bar -->
+          <!-- Linear Progress Bar -->
           <div class="progress-bar-container">
             <div class="progress-bar-fill" [style.width.%]="uploadProgress"></div>
           </div>
@@ -277,7 +274,7 @@ import { OrderService } from '../../services/order.service';
       height: 100%;
       background: linear-gradient(90deg, #3b82f6 0%, #6366f1 100%);
       border-radius: 999px;
-      transition: width 0.3s ease;
+      transition: width 0.2s linear;
     }
 
     .result-state {
@@ -358,15 +355,27 @@ import { OrderService } from '../../services/order.service';
     }
   `]
 })
-export class UploadComponent {
+export class UploadComponent implements OnDestroy {
   selectedFile: File | null = null;
   uploading = false;
   uploadProgress = 0;
   uploadResult: any = null;
   errorMessage = '';
   isDragging = false;
+  private progressTimer: any;
 
   constructor(private orderService: OrderService) {}
+
+  ngOnDestroy() {
+    this.stopProgressTimer();
+  }
+
+  private stopProgressTimer() {
+    if (this.progressTimer) {
+      clearInterval(this.progressTimer);
+      this.progressTimer = null;
+    }
+  }
 
   onDragOver(event: DragEvent) {
     event.preventDefault();
@@ -407,30 +416,29 @@ export class UploadComponent {
     this.uploadProgress = 0;
     this.errorMessage = '';
 
-    // Smooth visual progress increments while uploading & processing
-    const progressTimer = setInterval(() => {
-      if (this.uploadProgress < 90) {
-        this.uploadProgress += Math.floor(Math.random() * 12) + 6;
-        if (this.uploadProgress > 90) this.uploadProgress = 90;
+    this.stopProgressTimer();
+
+    // Smooth visual progress starting strictly from 0% upwards to 92%
+    this.progressTimer = setInterval(() => {
+      if (this.uploadProgress < 92) {
+        const step = Math.floor(Math.random() * 4) + 2; // 2% - 5% per tick
+        this.uploadProgress = Math.min(92, this.uploadProgress + step);
       }
-    }, 120);
+    }, 100);
 
     this.orderService.uploadCsv(this.selectedFile).subscribe({
       next: (event: any) => {
-        if (event.type === HttpEventType.UploadProgress && event.total) {
-          const raw = Math.round((90 * event.loaded) / event.total);
-          if (raw > this.uploadProgress) this.uploadProgress = raw;
-        } else if (event.type === HttpEventType.Response) {
-          clearInterval(progressTimer);
+        if (event.type === HttpEventType.Response) {
+          this.stopProgressTimer();
           this.uploadProgress = 100;
           setTimeout(() => {
             this.uploading = false;
             this.uploadResult = event.body;
-          }, 450);
+          }, 350);
         }
       },
       error: (err) => {
-        clearInterval(progressTimer);
+        this.stopProgressTimer();
         this.uploading = false;
         this.errorMessage = err.error?.message || 'Upload failed. Please try again.';
       }
@@ -438,6 +446,7 @@ export class UploadComponent {
   }
 
   resetUpload() {
+    this.stopProgressTimer();
     this.selectedFile = null;
     this.uploadResult = null;
     this.uploadProgress = 0;
