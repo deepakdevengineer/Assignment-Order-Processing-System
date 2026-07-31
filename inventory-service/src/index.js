@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const db = require('./db');
+const { initDb } = require('./db');
 
 const app = express();
 app.use(cors());
@@ -98,6 +99,7 @@ app.delete('/reservations/:orderId', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3002;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
+  await initDb();
   console.log(`Inventory Service running on port ${PORT}`);
 });

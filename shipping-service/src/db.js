@@ -13,4 +13,22 @@ const pool = mysql.createPool({
   ssl: process.env.DB_SSL === 'true' || process.env.DB_SSL === 'REQUIRED' ? { rejectUnauthorized: false } : undefined
 });
 
+async function initDb() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS shipments (
+        order_id VARCHAR(20) PRIMARY KEY,
+        sku VARCHAR(50) NOT NULL,
+        qty INT NOT NULL,
+        status ENUM('CREATED','CANCELLED') NOT NULL DEFAULT 'CREATED',
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB;
+    `);
+    console.log('[SHIPPING-SERVICE] DB tables initialized');
+  } catch (err) {
+    console.error('[SHIPPING-SERVICE] DB init error:', err.message);
+  }
+}
+
 module.exports = pool;
+module.exports.initDb = initDb;

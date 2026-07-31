@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const db = require('./db');
+const { initDb } = require('./db');
 
 const app = express();
 app.use(cors());
@@ -19,8 +20,8 @@ app.post('/orders', async (req, res) => {
   }
 
   try {
-    const [rows] = await db.query(
-      `INSERT INTO orders (order_id, sku, qty, amount, status) 
+    await db.query(
+      `INSERT INTO service_orders (order_id, sku, qty, amount, status) 
        VALUES (?, ?, ?, ?, 'CREATED') 
        ON DUPLICATE KEY UPDATE status=status`,
       [order_id, sku, qty, amount]
@@ -46,7 +47,7 @@ app.delete('/orders/:orderId', async (req, res) => {
   }
 
   try {
-    await db.query(`UPDATE orders SET status = 'CANCELLED' WHERE order_id = ?`, [orderId]);
+    await db.query(`UPDATE service_orders SET status = 'CANCELLED' WHERE order_id = ?`, [orderId]);
     console.log(`[ORDER-SERVICE] Order cancelled (order_id: ${orderId})`);
     res.json({ success: true });
   } catch (error) {
@@ -56,6 +57,7 @@ app.delete('/orders/:orderId', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
+  await initDb();
   console.log(`Order Service running on port ${PORT}`);
 });

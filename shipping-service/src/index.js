@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const db = require('./db');
+const { initDb } = require('./db');
 
 const app = express();
 app.use(cors());
@@ -56,6 +57,7 @@ app.delete('/shipments/:orderId', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3004;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
+  await initDb();
   console.log(`Shipping Service running on port ${PORT}`);
 });
