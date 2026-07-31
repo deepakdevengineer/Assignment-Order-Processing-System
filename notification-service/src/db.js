@@ -4,11 +4,11 @@ require('dotenv').config();
 const sslConfig = process.env.DB_SSL === 'true' || process.env.DB_SSL === 'REQUIRED' ? { rejectUnauthorized: false } : undefined;
 
 const notificationPool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
+  host: (process.env.DB_HOST || 'localhost').trim(),
   port: parseInt(process.env.DB_PORT || '3306'),
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || 'root',
-  database: process.env.DB_NAME || 'notification_db',
+  user: (process.env.DB_USER || 'root').trim(),
+  password: (process.env.DB_PASSWORD || 'root').trim(),
+  database: (process.env.DB_NAME || 'notification_db').trim(),
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
@@ -16,11 +16,11 @@ const notificationPool = mysql.createPool({
 });
 
 const coordinatorPool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
+  host: (process.env.DB_HOST || 'localhost').trim(),
   port: parseInt(process.env.DB_PORT || '3306'),
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || 'root',
-  database: process.env.COORDINATOR_DB_NAME || process.env.DB_NAME || 'coordinator_db',
+  user: (process.env.DB_USER || 'root').trim(),
+  password: (process.env.DB_PASSWORD || 'root').trim(),
+  database: (process.env.COORDINATOR_DB_NAME || process.env.DB_NAME || 'coordinator_db').trim(),
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
@@ -38,7 +38,7 @@ async function initDb() {
     `);
     console.log('[NOTIFICATION-SERVICE] DB initialized');
   } catch (err) {
-    console.error('[NOTIFICATION-SERVICE] DB init error:', err);
+    console.error('[NOTIFICATION-SERVICE] DB init error:', err.message);
   }
 }
 
