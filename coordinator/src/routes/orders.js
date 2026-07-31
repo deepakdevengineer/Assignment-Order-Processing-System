@@ -87,44 +87,82 @@ router.get('/:id', async (req, res) => {
 router.post('/upload', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-  const rows = [];
+  const rawRows = [];
   const { processOrder } = require('../saga/orchestrator');
 
   try {
     await new Promise((resolve, reject) => {
       fs.createReadStream(req.file.path)
         .pipe(csv())
-        .on('data', (data) => rows.push(data))
+        .on('data', (data) => rawRows.push(data))
         .on('end', resolve)
         .on('error', reject);
     });
 
     try { fs.unlinkSync(req.file.path); } catch (e) {}
 
-    let totalQueued = 0;
+    // Normalize keys to support BOM or different headers
+    const rows = rawRows.map(row => {
+      const normalized = {};
+      for (const k of Object.keys(row)) {
+        const cleanKey = k.replace(/^\uFEFF/, '').trim();
+        normalized[cleanKey] = row[k] ? row[k].trim() : '';
+      }
+      return normalized;
+    }).filter(row => row.order_id);
+
+    if (rows.length === 0) {
+      return res.json({ message: 'No valid rows found in CSV', totalQueued: 0, skipped: 0 });
+    }
+
+    // 1. Fetch existing order_ids in bulk
+    const orderIds = rows.map(r => r.order_id);
+    const [existingRows] = await db.query('SELECT order_id FROM orders WHERE order_id IN (?)', [orderIds]);
+    const existingSet = new Set((existingRows || []).map(r => r.order_id));
+
+    const newOrders = [];
     let skipped = 0;
 
-    for (const item of rows) {
-      if (!item.order_id) continue;
-      try {
-        const [existing] = await db.query('SELECT order_id FROM orders WHERE order_id = ?', [item.order_id]);
-        if (existing && existing.length > 0) {
-          skipped++;
-        } else {
-          await db.query(
-            'INSERT INTO orders (order_id, sku, qty, amount, status, fail_at, comp_fail_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [item.order_id, item.sku, parseInt(item.qty) || 1, parseFloat(item.amount) || 0, 'IN_PROGRESS', item.fail_at || null, item.comp_fail_at || null]
-          );
-          totalQueued++;
-
-          // Asynchronously trigger saga orchestrator for each order
-          processOrder(item).catch(err => console.error(`[SAGA ERROR] Order ${item.order_id}:`, err.message));
-        }
-      } catch (err) {
-        console.error('[UPLOAD ROW ERROR]:', item.order_id, err.message);
+    for (const r of rows) {
+      if (existingSet.has(r.order_id)) {
+        skipped++;
+      } else {
+        existingSet.add(r.order_id); // Prevent intra-CSV duplicates
+        newOrders.push(r);
       }
     }
 
+    let totalQueued = 0;
+
+    // 2. Perform bulk insertion in chunks of 500
+    const CHUNK_SIZE = 500;
+    for (let i = 0; i < newOrders.length; i += CHUNK_SIZE) {
+      const chunk = newOrders.slice(i, i + CHUNK_SIZE);
+      const values = chunk.map(item => [
+        item.order_id,
+        item.sku || 'WIDGET-A',
+        parseInt(item.qty, 10) || 1,
+        parseFloat(item.amount) || 0,
+        'IN_PROGRESS',
+        item.fail_at || null,
+        item.comp_fail_at || null
+      ]);
+
+      if (values.length > 0) {
+        await db.query(
+          'INSERT INTO orders (order_id, sku, qty, amount, status, fail_at, comp_fail_at) VALUES ?',
+          [values]
+        );
+        totalQueued += chunk.length;
+
+        // Fire Saga orchestrator asynchronously for each newly inserted order
+        chunk.forEach(item => {
+          processOrder(item).catch(err => console.error(`[SAGA ERROR] ${item.order_id}:`, err.message));
+        });
+      }
+    }
+
+    console.log(`[CSV UPLOAD SUCCESS] Queued: ${totalQueued}, Skipped: ${skipped}`);
     res.json({ message: 'Upload completed', totalQueued, skipped });
   } catch (error) {
     console.error('[COORDINATOR CSV UPLOAD ERROR]:', error);
