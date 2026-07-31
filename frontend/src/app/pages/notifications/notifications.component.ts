@@ -12,31 +12,37 @@ import { Notification } from '../../models/order.model';
       <div class="page-header">
         <div>
           <h1 class="page-title">Notifications</h1>
-          <p class="page-subtitle">Shipping notifications sent to customers</p>
+          <p class="page-subtitle">Shipping and order notifications sent to customers</p>
         </div>
-        <button class="btn btn-outline btn-sm" (click)="loadNotifications()" id="btn-refresh-notifications">
-          <span class="material-icons-round">refresh</span>
-          Refresh
-        </button>
+        <div class="header-actions">
+          <button class="btn btn-primary btn-sm" (click)="triggerSync()" [disabled]="syncing">
+            <span class="material-icons-round">sync</span>
+            {{ syncing ? 'Syncing...' : 'Sync Notifications Now' }}
+          </button>
+          <button class="btn btn-outline btn-sm" (click)="loadNotifications()" id="btn-refresh-notifications">
+            <span class="material-icons-round">refresh</span>
+            Refresh
+          </button>
+        </div>
       </div>
 
       <!-- Info Banner -->
       <div class="info-banner">
         <span class="material-icons-round">info</span>
-        <span>The notification service runs every <strong>15 minutes</strong> and sends exactly one notification per shipped order.</span>
+        <span>The notification service runs an automated cron job every <strong>1 minute</strong> and generates exactly-once notifications for all placed/shipped orders.</span>
       </div>
 
       <!-- Stats -->
       <div class="stats-grid" style="grid-template-columns: repeat(2, 1fr); max-width: 500px;">
         <div class="stat-card">
           <div class="stat-label">Total Sent</div>
-          <div class="stat-value">{{ notifications.length }}</div>
+          <div class="stat-value-solid" style="color: #60a5fa;">{{ notifications.length }}</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Service Status</div>
-          <div class="stat-value" style="font-size: 1rem; background: linear-gradient(135deg, #10b981, #06b6d4); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
-            <span class="material-icons-round" style="font-size: 14px; color: var(--accent-green); -webkit-text-fill-color: var(--accent-green);">●</span>
-            Active
+          <div class="stat-value-solid" style="font-size: 1.125rem; color: #34d399; display: flex; align-items: center; gap: 6px;">
+            <span class="material-icons-round" style="font-size: 16px; color: #34d399;">check_circle</span>
+            Active & Running
           </div>
         </div>
       </div>
@@ -82,7 +88,7 @@ import { Notification } from '../../models/order.model';
       <div class="empty-state" *ngIf="!loading && notifications.length === 0">
         <span class="material-icons-round empty-icon">notifications_off</span>
         <h3>No notifications yet</h3>
-        <p>Notifications will appear here once shipped orders are processed by the notification service.</p>
+        <p>Click "Sync Notifications Now" above or wait 1 minute for automated background processing.</p>
       </div>
     </div>
   `,
@@ -107,6 +113,18 @@ import { Notification } from '../../models/order.model';
     .page-subtitle {
       font-size: 0.875rem;
       color: var(--text-muted);
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .stat-value-solid {
+      font-size: 2rem;
+      font-weight: 800;
+      font-family: var(--font-mono), sans-serif;
+      margin-top: 4px;
     }
 
     .info-banner {
@@ -160,6 +178,7 @@ import { Notification } from '../../models/order.model';
 export class NotificationsComponent implements OnInit {
   notifications: Notification[] = [];
   loading = true;
+  syncing = false;
 
   constructor(private orderService: OrderService) {}
 
@@ -177,6 +196,20 @@ export class NotificationsComponent implements OnInit {
       error: () => {
         this.loading = false;
         this.notifications = [];
+      }
+    });
+  }
+
+  triggerSync() {
+    this.syncing = true;
+    this.orderService.triggerNotifications().subscribe({
+      next: () => {
+        this.syncing = false;
+        this.loadNotifications();
+      },
+      error: () => {
+        this.syncing = false;
+        this.loadNotifications();
       }
     });
   }

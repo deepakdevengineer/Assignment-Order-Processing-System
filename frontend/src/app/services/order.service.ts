@@ -73,4 +73,8 @@ export class OrderService {
   getNotifications(): Observable<Notification[]> {
     return this.http.get<Notification[]>(`${this.notificationUrl}/notifications`);
   }
+
+  triggerNotifications(): Observable<any> {
+    return this.http.post(`${this.notificationUrl}/notifications/trigger`, {});
+  }
 }

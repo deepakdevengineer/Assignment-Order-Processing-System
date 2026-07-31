@@ -15,18 +15,24 @@ app.get('/', (req, res) => res.json({ status: 'online', service: 'Notification S
 
 const PORT = process.env.PORT || 3005;
 
-// Redis client setup
-const redis = new Redis({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: process.env.REDIS_PORT ? parseInt(process.env.REDIS_PORT, 10) : 6379,
-  retryStrategy(times) {
-    return Math.min(times * 100, 3000);
+// Redis client setup with graceful fallback
+let redis = null;
+if (process.env.REDIS_HOST && process.env.REDIS_HOST !== 'localhost' && process.env.REDIS_HOST !== '127.0.0.1') {
+  try {
+    redis = new Redis({
+      host: process.env.REDIS_HOST,
+      port: process.env.REDIS_PORT ? parseInt(process.env.REDIS_PORT, 10) : 6379,
+      retryStrategy(times) {
+        if (times > 3) return null;
+        return Math.min(times * 100, 2000);
+      },
+      lazyConnect: true
+    });
+    redis.on('error', (err) => console.warn('[NOTIFICATION] Redis warning:', err.message));
+  } catch (e) {
+    console.warn('[NOTIFICATION] Redis client disabled:', e.message);
   }
-});
-
-redis.on('error', (err) => {
-  console.error('[NOTIFICATION] Redis error:', err.message);
-});
+}
 
 let lastRun = null;
 
@@ -36,15 +42,17 @@ async function runNotificationJob() {
   const lockUuid = randomUUID();
   const lockTtl = 60; // 60 seconds TTL
 
-  let acquired = false;
-  try {
-    const result = await redis.set(lockKey, lockUuid, 'EX', lockTtl, 'NX');
-    if (result === 'OK') {
+  let acquired = true; // Default to true if Redis is offline
+  if (redis) {
+    try {
+      const result = await redis.set(lockKey, lockUuid, 'EX', lockTtl, 'NX');
+      if (result !== 'OK') {
+        acquired = false;
+      }
+    } catch (err) {
+      console.warn('[NOTIFICATION] Redis lock failed, falling back to DB uniqueness:', err.message);
       acquired = true;
     }
-  } catch (err) {
-    console.error('[NOTIFICATION] Error acquiring Redis lock:', err.message);
-    return;
   }
 
   if (!acquired) {
@@ -55,47 +63,40 @@ async function runNotificationJob() {
   lastRun = new Date().toISOString();
 
   try {
-    // Query coordinator_db.orders for orders marked as SHIPPED
-    const [shippedOrders] = await coordinatorPool.query(
-      "SELECT order_id FROM orders WHERE status = 'SHIPPED'"
+    // Query coordinator orders marked as PLACED or SHIPPED
+    const [orders] = await coordinatorPool.query(
+      "SELECT order_id FROM orders WHERE status IN ('PLACED', 'SHIPPED')"
     );
 
-    for (const order of shippedOrders) {
+    for (const order of orders) {
       const orderId = order.order_id;
 
-      // Check notification_db.notifications for existing entry
-      const [existing] = await notificationPool.query(
-        "SELECT id FROM notifications WHERE order_id = ?",
+      // Use INSERT IGNORE for exactly-once notification guarantee
+      const [result] = await notificationPool.query(
+        "INSERT IGNORE INTO notifications (order_id) VALUES (?)",
         [orderId]
       );
 
-      if (existing.length === 0) {
-        // Use INSERT IGNORE for safety (UNIQUE key on order_id prevents duplicates even if two instances race)
-        const [result] = await notificationPool.query(
-          "INSERT IGNORE INTO notifications (order_id) VALUES (?)",
-          [orderId]
-        );
-
-        if (result.affectedRows > 0) {
-          console.log(`[NOTIFICATION] Sent notification for order ${orderId}`);
-        }
+      if (result.affectedRows > 0) {
+        console.log(`[NOTIFICATION] Sent notification for order ${orderId}`);
       }
     }
   } catch (err) {
     console.error('[NOTIFICATION] Error during notification job execution:', err.message);
   } finally {
-    // Release the lock: DEL notification-lock (only if value matches our uuid)
-    const releaseLua = `
-      if redis.call("get", KEYS[1]) == ARGV[1] then
-        return redis.call("del", KEYS[1])
-      else
-        return 0
-      end
-    `;
-    try {
-      await redis.eval(releaseLua, 1, lockKey, lockUuid);
-    } catch (err) {
-      console.error('[NOTIFICATION] Error releasing Redis lock:', err.message);
+    if (redis && acquired) {
+      const releaseLua = `
+        if redis.call("get", KEYS[1]) == ARGV[1] then
+          return redis.call("del", KEYS[1])
+        else
+          return 0
+        end
+      `;
+      try {
+        await redis.eval(releaseLua, 1, lockKey, lockUuid);
+      } catch (err) {
+        // Silently ignore release errors
+      }
     }
   }
 }
@@ -106,7 +107,7 @@ app.get('/api/notifications', async (req, res) => {
     const [notifications] = await notificationPool.query(
       "SELECT id, order_id, sent_at FROM notifications ORDER BY sent_at DESC, id DESC"
     );
-    res.json(notifications);
+    res.json(notifications || []);
   } catch (err) {
     console.error('[NOTIFICATION] Error fetching notifications:', err.message);
     res.status(500).json({ error: 'Failed to fetch notifications' });
@@ -119,7 +120,7 @@ app.get('/api/notifications/status', async (req, res) => {
     const [rows] = await notificationPool.query(
       "SELECT COUNT(*) AS totalSent FROM notifications"
     );
-    const totalSent = rows[0] ? Number(rows[0].totalSent) : 0;
+    const totalSent = rows && rows[0] ? Number(rows[0].totalSent) : 0;
     res.json({
       lastRun: lastRun,
       totalSent: totalSent
@@ -130,7 +131,7 @@ app.get('/api/notifications/status', async (req, res) => {
   }
 });
 
-// POST /api/notifications/trigger -> manually trigger notification job (useful for testing/admin)
+// POST /api/notifications/trigger -> manually trigger notification job
 app.post('/api/notifications/trigger', async (req, res) => {
   try {
     await runNotificationJob();
@@ -141,9 +142,9 @@ app.post('/api/notifications/trigger', async (req, res) => {
   }
 });
 
-// Schedule cron job to run every 15 minutes (*/15 * * * *)
-cron.schedule('*/15 * * * *', () => {
-  console.log('[NOTIFICATION] Running scheduled 15-minute cron job...');
+// Schedule cron job to run every minute (*/1 * * * *)
+cron.schedule('*/1 * * * *', () => {
+  console.log('[NOTIFICATION] Running 1-minute cron job...');
   runNotificationJob().catch(err => {
     console.error('[NOTIFICATION] Cron job execution failed:', err.message);
   });
@@ -154,6 +155,8 @@ async function startServer() {
   await initDb();
   app.listen(PORT, () => {
     console.log(`[NOTIFICATION SERVICE] Express server listening on port ${PORT}`);
+    // Run initial notification job on startup
+    runNotificationJob().catch(err => console.error('[NOTIFICATION] Startup job error:', err.message));
   });
 }
 
